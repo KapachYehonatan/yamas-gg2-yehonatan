@@ -136,19 +136,30 @@ metaphlan --install --index mpa_vJun23_CHOCOPhlAnSGB_202307 --bowtie2db $DB_ROOT
 
 > **Note**: These databases are large (~20+ GB total). If you've already downloaded them, skip this step.
 
-### Step 5b: Download 16S Reference Classifier
+### Step 5b: Download & Prepare Greengenes2 for 16S
 
-Download a VSEARCH --sintax compatible FASTA reference:
-
-1. Visit: https://www.drive5.com/usearch/manual/sintax_downloads.html
-2. Download `gg_16s_13.5.fa.gz` (GreenGenes 13.5, 99% OTUs)
-3. Create the classifier directory and extract:
+YaMAS uses VSEARCH SINTAX, so the official Greengenes2 sequence and taxonomy
+artifacts must first be combined into one annotated FASTA. For standard
+515F/806R V4 data, prepare the Greengenes2 2024.09 V4 backbone:
 
 ```bash
 mkdir -p $DB_ROOT/16S_classifiers
-cp /path/to/gg_16s_13.5.fa.gz $DB_ROOT/16S_classifiers/
-gunzip $DB_ROOT/16S_classifiers/gg_16s_13.5.fa.gz
+cd $DB_ROOT/16S_classifiers
+
+curl -LO https://ftp.microbio.me/greengenes_release/current/2024.09.backbone.v4.fna.qza
+curl -LO https://ftp.microbio.me/greengenes_release/current/2024.09.backbone.tax.qza
+
+yamas-prepare-gg2 \
+  2024.09.backbone.v4.fna.qza \
+  2024.09.backbone.tax.qza \
+  gg2-2024.09-v4-sintax.fasta
 ```
+
+For non-V4 16S regions, download `2024.09.backbone.full-length.fna.qza`
+instead and name the output `gg2-2024.09-full-length-sintax.fasta`. This is a
+standalone SINTAX compatibility workflow; it does not use the full
+Greengenes2 reference phylogeny or replace the native `q2-greengenes2`
+workflow.
 
 ### Step 6: Update Environment Variables
 
@@ -199,7 +210,7 @@ yamas --download SRR11415443 SRR11415445 --type 16S \
 
 # Analyze (paired-end with comma-separated trim/trunc)
 yamas --export /path/SRR11415443-... 16S 13,13 150,150 \
-  /path/gg_16s_13.5.fa 24
+  /path/gg2-2024.09-v4-sintax.fasta 24
 ```
 
 ### Scenario 2: Long Amplicon, PE Merge Fails → Use --export-as-single
@@ -209,7 +220,7 @@ yamas --export /path/SRR11415443-... 16S 13,13 150,150 \
 
 # Export with SINGLE-END fallback
 yamas --export /path/PRJEB30615-... 16S 15 150 \
-  /path/gg_16s_13.5.fa 24 --export-as-single
+  /path/gg2-2024.09-v4-sintax.fasta 24 --export-as-single
 ```
 
 ### Scenario 3: Shotgun Metagenomics
@@ -280,7 +291,7 @@ yamas --download ACCESSION1 ACCESSION2 --type 16S \
 yamas --export /path/dataset-... 16S \
   13,13 \
   150,150 \
-  /path/gg_16s_13.5.fa \
+  /path/gg2-2024.09-v4-sintax.fasta \
   24
 ```
 
@@ -289,7 +300,7 @@ yamas --export /path/dataset-... 16S \
 yamas --export /path/dataset-... 16S \
   15 \
   150 \
-  /path/gg_16s_13.5.fa \
+  /path/gg2-2024.09-v4-sintax.fasta \
   24 \
   --export-as-single
 ```
@@ -394,7 +405,7 @@ Do you have both _1 and _2 FASTQ files?
 
 ```bash
 yamas --export /path/dataset-... 16S 15 150 \
-  /path/gg_16s_13.5.fa 24 --export-as-single
+  /path/gg2-2024.09-v4-sintax.fasta 24 --export-as-single
 ```
 
 #### Why You Might Need This
@@ -458,13 +469,13 @@ yamas --download PRJEB30615 --type 16S --acc_list acc.txt
 
 # Step 2: First attempt with paired-end
 yamas --export /path/PRJEB30615-... 16S 15,15 150,150 \
-  /data/gg_16s_13.5.fa 24
+  /data/gg2-2024.09-v4-sintax.fasta 24
 
 # >>> ERROR: Merging fails, 99.9% dropout detected <<<
 
 # Step 3: Fallback to single-end
 yamas --export /path/PRJEB30615-... 16S 15 150 \
-  /data/gg_16s_13.5.fa 24 --export-as-single
+  /data/gg2-2024.09-v4-sintax.fasta 24 --export-as-single
 
 # >>> SUCCESS: Process only forward reads, salvage dataset <<<
 ```
@@ -573,10 +584,11 @@ yamas --export DIR 16S 15 150 classifier.fa 24 --export-as-single
 
 **Fix**: Verify FASTA reference database exists:
 ```bash
-ls -lh /path/gg_16s_13.5.fa
+ls -lh /path/gg2-2024.09-v4-sintax.fasta
 ```
 
-Ensure it's formatted for VSEARCH --sintax (FASTA with proper headers).
+Ensure it is a VSEARCH SINTAX FASTA whose headers contain `;tax=`. Raw
+Greengenes2 `.qza` artifacts must first be converted with `yamas-prepare-gg2`.
 
 ---
 

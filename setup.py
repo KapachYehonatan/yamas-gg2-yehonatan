@@ -25,6 +25,7 @@ setuptools.setup(
     entry_points={
         'console_scripts': [
             'yamas = yamas:main',
+            'yamas-prepare-gg2 = yamas.prepare_gg2:main',
         ]
     },
     packages=setuptools.find_packages(),

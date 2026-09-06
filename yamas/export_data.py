@@ -3,14 +3,24 @@ from __future__ import annotations
 import csv
 import datetime
 import glob
+import gzip
 import os
 import pickle
+import shlex
+import shutil
 import pandas as pd
 from collections import defaultdict
 
 from .utilities import ReadsData, run_cmd
 
 nodes_names = []
+
+
+def _concatenate_files(paths, output_path):
+    with open(output_path, "wb") as output:
+        for path in paths:
+            with open(path, "rb") as source:
+                shutil.copyfileobj(source, output)
 
 
 # ---------------------------------------------------------------------------
@@ -21,15 +31,33 @@ def _reference_db_path(classifier_path: str):
     """Return the classifier/reference FASTA path.
 
     For the new standalone pipeline the user supplies a FASTA reference
-    database (e.g. the SILVA or GreenGenes FASTA formatted for vsearch
+    database (e.g. SILVA or a prepared Greengenes2 FASTA formatted for vsearch
     --sintax).  The argument name is kept as 'classifier' for CLI
     backwards-compatibility.
     """
-    if not os.path.exists(classifier_path):
+    classifier_path = os.fspath(classifier_path)
+    if not os.path.isfile(classifier_path):
         raise FileNotFoundError(
             f"Reference database not found at: {classifier_path}\n"
             "Please supply a vsearch-compatible FASTA reference "
-            "(e.g. silva_138_99_sintax.fasta or gg_13_8_99_sintax.fasta)."
+            "(e.g. silva_138_99_sintax.fasta or gg2-2024.09-v4-sintax.fasta)."
+        )
+    if classifier_path.lower().endswith(".qza"):
+        raise ValueError(
+            "QIIME 2 artifacts cannot be passed directly to VSEARCH SINTAX. "
+            "Prepare Greengenes2 first with yamas-prepare-gg2."
+        )
+
+    opener = gzip.open if classifier_path.lower().endswith(".gz") else open
+    try:
+        with opener(classifier_path, "rt", encoding="ascii") as reference:
+            first_record = next((line.strip() for line in reference if line.strip()), "")
+    except (OSError, UnicodeError) as error:
+        raise ValueError(f"Could not read reference FASTA: {classifier_path}") from error
+    if not first_record.startswith(">") or ";tax=" not in first_record:
+        raise ValueError(
+            "Reference must be FASTA with SINTAX taxonomy in each header "
+            "(e.g. >ID;tax=d:Bacteria,p:Bacillota;)."
         )
     return classifier_path
 
@@ -168,19 +196,19 @@ def dereplicate_and_denoise(reads_data: ReadsData, trimmed_dir: str, threads: in
     for fq in input_files:
         basename = os.path.splitext(os.path.basename(fq))[0]
         sample_label = basename.replace("_merged", "")
+        sample_arg = shlex.quote(sample_label)
+        relabel_arg = shlex.quote(f"{sample_label}.")
         tmp_fasta = fq + ".fasta"
         run_cmd([
             f"vsearch --fastq_filter {fq}"
             f" --fastq_maxee 1.0"
             f" --fastaout {tmp_fasta}"
-            f" --relabel {sample_label}."
+            f" --relabel {relabel_arg}"
+            f" --sample {sample_arg}"
             f" --fasta_width 0"
         ])
-
-    # Cat all per-sample FASTAs
-    tmp_fastas = " ".join(f + ".fasta" for f in input_files)
-    run_cmd([f"cat {tmp_fastas} > {all_fasta}"])
-
+    # Concatenate without placing every path on one command line (ARG_MAX).
+    _concatenate_files((f + ".fasta" for f in input_files), all_fasta)
     # --- 2c. Dereplicate ---
     derep_fasta = os.path.join(qza_dir, "derep.fasta")
     run_cmd([
@@ -248,7 +276,7 @@ def assign_taxonomy(reads_data: ReadsData, data_type, classifier_path: str, thre
         f" --tabbedout {tax_out}"
         f" --sintax_cutoff 0.8"
         f" --threads {threads}"
-    ])
+    ], strict=True)
     return tax_out
 
 

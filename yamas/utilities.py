@@ -42,8 +42,8 @@ def qiime2_version():
 def download_classifier_url():
     """Return a URL hint for downloading a vsearch-compatible reference database."""
     return ("https://www.arb-silva.de/download/archive/qiime/ or "
-            "ftp://greengenes.microbio.me/greengenes_release/ "
-            "(download a FASTA formatted for vsearch --sintax)")
+            "https://ftp.microbio.me/greengenes_release/current/ "
+            "(prepare Greengenes2 with yamas-prepare-gg2)")
 
 def check_conda_qiime2():
     """No-op. QIIME2 is no longer required — kept for backward compatibility."""

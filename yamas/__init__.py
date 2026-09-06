@@ -1,15 +1,18 @@
 import argparse
 import json
 from importlib.metadata import version, PackageNotFoundError # Modern replacement
-from .dataset_downloading import download
-from .dataset_downloading import continue_from
-from .dataset_downloading import continue_from_fastq
-from .prerun_configs import set_environment
-from .dataset_downloading import download_qiita
-from .dataset_downloading import download_fastq
 
 
 def main():
+    from .dataset_downloading import (
+        continue_from,
+        continue_from_fastq,
+        download,
+        download_fastq,
+        download_qiita,
+    )
+    from .prerun_configs import set_environment
+
     # Initialize the argument parser with a description.
     parser = argparse.ArgumentParser(description='YMS package')
     
